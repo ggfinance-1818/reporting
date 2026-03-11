@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 /* ── Your Google Apps Script URL (already connected) ── */
-const WEBHOOK = "https://script.google.com/macros/s/AKfycbyPioCt01pkkmZoHBaDxWk24Wh2pn1kdP3rvAcZ2DeoBWCxZqn1AQ09FDPdL7mqjMW4Rw/exec";
+const WEBHOOK = "https://script.google.com/macros/s/AKfycbxSKc7-bB7Zle2WbrkID5nu3GS_gQBqTCsIHuGuICaY0inCil4XVZgabiDPzwiQKvPjpw/exec";
 
 /* ── Fields ── */
 const FIELDS = [
@@ -342,6 +342,7 @@ function EditMode({ lastAnswers, onDone, showToast }) {
     setSaving(true);
     try {
       await sendToSheet({ action: "update", date: editDate, row: FIELDS.map(f => edited[f.id] || "") });
+      setOriginal({ ...edited }); // sync so UI shows saved values, clears amber dots
       showToast(`${changedFields.length} field${changedFields.length > 1 ? "s" : ""} updated successfully.`, "success");
       setTimeout(onDone, 1800);
     } catch {
