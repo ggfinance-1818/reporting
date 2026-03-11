@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 /* ── Your Google Apps Script URL (already connected) ── */
-const WEBHOOK = "https://script.google.com/macros/s/AKfycbwXZf0IWO7lIME9JOVcLYMsHXNuNEBRPujJ-xDwXEpZBK-6kiELNGmY2I2TtI6ubQ1izg/exec";
+const WEBHOOK = "https://script.google.com/macros/s/AKfycbxSKc7-bB7Zle2WbrkID5nu3GS_gQBqTCsIHuGuICaY0inCil4XVZgabiDPzwiQKvPjpw/exec";
 
 /* ── Fields ── */
 const FIELDS = [
