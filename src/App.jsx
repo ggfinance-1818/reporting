@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 /* ── Your Google Apps Script URL (already connected) ── */
-const WEBHOOK = "https://script.google.com/macros/s/AKfycbxzIlOdV0MArY3MgcduJWg76iDVAr_ORCntoIZUMjIPFs8bVyOiNN0Gq1bUgAbffQtHtw/exec";
+const WEBHOOK = "https://script.google.com/macros/s/AKfycbyFK14Y-64KdSd910G_pV1iGZLivvDHf-Dduwerq6aKJZf65o98brvlMD8z5-W4hMghmw/exec";
 
 /* ── Fields ── */
 const FIELDS = [
@@ -22,17 +22,16 @@ const QUESTIONS = [
   "How many jars are currently with customers?",
 ];
 
-/* ── Send to Sheet ── */
+/* ── All sheet calls go via /api/sheet (Netlify serverless function)
+   This sidesteps CORS entirely — the server calls Google, not the browser ── */
 async function sendToSheet(payload) {
-  const body = new URLSearchParams();
-  body.append("payload", JSON.stringify(payload));
-  await fetch(WEBHOOK, {
+  const res = await fetch("/api/sheet", {
     method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
-  return true;
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return await res.json();
 }
 
 /* ── Styles ── */
@@ -251,14 +250,7 @@ function EditMode({ lastAnswers, onDone, showToast }) {
   const fetchRow = async () => {
     setFetching(true);
     try {
-      const body = new URLSearchParams();
-      body.append("payload", JSON.stringify({ action: "fetch", date: editDate }));
-      const res = await fetch(WEBHOOK, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-      });
-      const json = await res.json();
+      const json = await sendToSheet({ action: "fetch", date: editDate });
       if (json.found) {
         const data = {};
         FIELDS.forEach((f, i) => { data[f.id] = json.row[i] ?? ""; });
@@ -269,8 +261,9 @@ function EditMode({ lastAnswers, onDone, showToast }) {
         showToast("No report found for that date.", "error");
         setOriginal(null); setEdited(null);
       }
-    } catch {
-      showToast("Could not fetch — check your Apps Script is deployed correctly.", "error");
+    } catch(err) {
+      console.error(err);
+      showToast("Could not fetch — redeploy your Apps Script with the updated code.", "error");
     }
     setFetching(false);
   };
