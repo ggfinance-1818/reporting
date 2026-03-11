@@ -1,7 +1,7 @@
 // netlify/functions/sheet.js
 // This runs on Netlify's server - no CORS issues!
 
-const WEBHOOK = "https://script.google.com/macros/s/AKfycbyFK14Y-64KdSd910G_pV1iGZLivvDHf-Dduwerq6aKJZf65o98brvlMD8z5-W4hMghmw/exec";
+const WEBHOOK = "https://script.google.com/macros/s/AKfycbznVLp9viMc7320yK6Z_QJHDWQPoOxMt5xwvFyTMU-qvfTVsoeP7sk89RDb5kJ0v2_6Gw/exec";
 
 exports.handler = async function (event) {
   const headers = {
