@@ -304,7 +304,7 @@ function Toast({ msg, type }) {
 }
 
 /* ── Edit Mode ── */
-function EditMode({ lastAnswers, onDone, showToast }) {
+function EditMode({ lastAnswers, onDone, onSave, showToast }) {
   const today = () => new Date().toISOString().split("T")[0];
   const [editDate, setEditDate] = useState(lastAnswers?.date || today());
   const [original, setOriginal] = useState(lastAnswers || null);
@@ -343,8 +343,9 @@ function EditMode({ lastAnswers, onDone, showToast }) {
     try {
       await sendToSheet({ action: "update", date: editDate, row: FIELDS.map(f => edited[f.id] || "") });
       setOriginal({ ...edited }); // sync so UI shows saved values, clears amber dots
+      if (onSave) onSave({ ...edited }); // update parent answers so SuccessScreen reflects new values
       showToast(`${changedFields.length} field${changedFields.length > 1 ? "s" : ""} updated successfully.`, "success");
-      setTimeout(onDone, 1800);
+      setTimeout(() => onDone({ ...edited }), 1800);
     } catch {
       showToast("Save failed — please try again.", "error");
     }
@@ -543,7 +544,11 @@ export default function App() {
           {editMode ? (
             <EditMode
               lastAnswers={submitted ? answers : null}
-              onDone={() => setEditMode(false)}
+              onDone={(updatedData) => {
+                if (updatedData) setAnswers(updatedData);
+                setEditMode(false);
+              }}
+              onSave={(updated) => setAnswers(updated)}
               showToast={showToast}
             />
           ) : !submitted ? (
