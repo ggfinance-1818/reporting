@@ -22,16 +22,85 @@ const QUESTIONS = [
   "How many jars are currently with customers?",
 ];
 
-/* ── All sheet calls go via /api/sheet (Netlify serverless function)
-   This sidesteps CORS entirely — the server calls Google, not the browser ── */
-async function sendToSheet(payload) {
-  const res = await fetch("/api/sheet", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+/* ── Sheet helpers ────────────────────────────────────────────
+   append / update  →  hidden iframe form POST  (no CORS check)
+   fetch            →  JSONP script tag         (no CORS check)
+──────────────────────────────────────────────────────────── */
+function sheetPost(params) {
+  return new Promise((resolve) => {
+    const id = "_f" + Date.now();
+
+    // hidden iframe so the redirect goes nowhere visible
+    const iframe = document.createElement("iframe");
+    iframe.name = id;
+    iframe.style.cssText = "display:none;width:0;height:0;border:0;";
+    document.body.appendChild(iframe);
+
+    // hidden form targeting that iframe
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = WEBHOOK;
+    form.target = id;
+    form.style.display = "none";
+
+    Object.entries(params).forEach(([k, v]) => {
+      const inp = document.createElement("input");
+      inp.type = "hidden";
+      inp.name = k;
+      inp.value = String(v);
+      form.appendChild(inp);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+
+    // clean up after 4 s — by then GAS has processed it
+    setTimeout(() => {
+      try { document.body.removeChild(form); } catch (_) {}
+      try { document.body.removeChild(iframe); } catch (_) {}
+      resolve({ status: "ok" });
+    }, 4000);
   });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  return await res.json();
+}
+
+function sheetFetch(date) {
+  return new Promise((resolve, reject) => {
+    const cb = "_cb" + Date.now();
+    const script = document.createElement("script");
+
+    const timer = setTimeout(() => {
+      delete window[cb];
+      try { document.body.removeChild(script); } catch (_) {}
+      reject(new Error("Timeout — sheet did not respond"));
+    }, 12000);
+
+    window[cb] = (data) => {
+      clearTimeout(timer);
+      delete window[cb];
+      try { document.body.removeChild(script); } catch (_) {}
+      resolve(data);
+    };
+
+    script.src = WEBHOOK + "?action=fetch&date=" + encodeURIComponent(date) + "&cb=" + cb;
+    script.onerror = () => {
+      clearTimeout(timer);
+      delete window[cb];
+      reject(new Error("Script tag failed to load"));
+    };
+    document.body.appendChild(script);
+  });
+}
+
+async function sendToSheet(payload) {
+  if (payload.action === "fetch") {
+    return await sheetFetch(payload.date);
+  }
+  // append or update
+  return await sheetPost({
+    action: payload.action,
+    row:    JSON.stringify(payload.row),
+    date:   payload.date || "",
+  });
 }
 
 /* ── Styles ── */
