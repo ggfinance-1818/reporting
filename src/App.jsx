@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 /* ── Your Google Apps Script URL (already connected) ── */
-const WEBHOOK = "https://script.google.com/macros/s/AKfycbxNBQTLz_eR64eh0Osm3UgsjA-fGkCoyIdVnYCXpRaecIYqtkebTruzOzCQ49etD582xg/exec";
+const WEBHOOK = "https://script.google.com/macros/s/AKfycbycrvTdcf8deICUqb8wvbrq7_p7G9ThWpiyWt4k-_5Ih5O78mEDJGw-Yp9-liuaAqOCxg/exec";
 
 /* ── Fields ── */
 const FIELDS = [
@@ -23,47 +23,11 @@ const QUESTIONS = [
 ];
 
 /* ── Sheet helpers ────────────────────────────────────────────
-   append / update  →  hidden iframe form POST  (no CORS check)
-   fetch            →  JSONP script tag         (no CORS check)
+   ALL operations use JSONP <script> tag GET requests.
+   This is the only method that works 100% with Apps Script
+   from a browser — no CORS, no redirects losing params.
 ──────────────────────────────────────────────────────────── */
-function sheetPost(params) {
-  return new Promise((resolve) => {
-    const id = "_f" + Date.now();
-
-    // hidden iframe so the redirect goes nowhere visible
-    const iframe = document.createElement("iframe");
-    iframe.name = id;
-    iframe.style.cssText = "display:none;width:0;height:0;border:0;";
-    document.body.appendChild(iframe);
-
-    // hidden form targeting that iframe
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = WEBHOOK;
-    form.target = id;
-    form.style.display = "none";
-
-    Object.entries(params).forEach(([k, v]) => {
-      const inp = document.createElement("input");
-      inp.type = "hidden";
-      inp.name = k;
-      inp.value = String(v);
-      form.appendChild(inp);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-
-    // clean up after 4 s — by then GAS has processed it
-    setTimeout(() => {
-      try { document.body.removeChild(form); } catch (_) {}
-      try { document.body.removeChild(iframe); } catch (_) {}
-      resolve({ status: "ok" });
-    }, 4000);
-  });
-}
-
-function sheetFetch(date) {
+function sheetCall(params) {
   return new Promise((resolve, reject) => {
     const cb = "_cb" + Date.now();
     const script = document.createElement("script");
@@ -71,8 +35,8 @@ function sheetFetch(date) {
     const timer = setTimeout(() => {
       delete window[cb];
       try { document.body.removeChild(script); } catch (_) {}
-      reject(new Error("Timeout — sheet did not respond"));
-    }, 12000);
+      reject(new Error("Timeout — Apps Script did not respond"));
+    }, 15000);
 
     window[cb] = (data) => {
       clearTimeout(timer);
@@ -81,11 +45,13 @@ function sheetFetch(date) {
       resolve(data);
     };
 
-    script.src = WEBHOOK + "?action=fetch&date=" + encodeURIComponent(date) + "&cb=" + cb;
+    // Build query string with callback
+    const qs = new URLSearchParams({ ...params, cb }).toString();
+    script.src = WEBHOOK + "?" + qs;
     script.onerror = () => {
       clearTimeout(timer);
       delete window[cb];
-      reject(new Error("Script tag failed to load"));
+      reject(new Error("Script tag failed — check Apps Script deployment"));
     };
     document.body.appendChild(script);
   });
@@ -93,14 +59,18 @@ function sheetFetch(date) {
 
 async function sendToSheet(payload) {
   if (payload.action === "fetch") {
-    return await sheetFetch(payload.date);
+    return await sheetCall({ action: "fetch", date: payload.date });
   }
-  // append or update
-  return await sheetPost({
-    action: payload.action,
-    row:    JSON.stringify(payload.row),
-    date:   payload.date || "",
-  });
+  if (payload.action === "append") {
+    return await sheetCall({ action: "append", row: JSON.stringify(payload.row) });
+  }
+  if (payload.action === "update") {
+    return await sheetCall({
+      action: "update",
+      date: payload.date,
+      row: JSON.stringify(payload.row),
+    });
+  }
 }
 
 /* ── Styles ── */
